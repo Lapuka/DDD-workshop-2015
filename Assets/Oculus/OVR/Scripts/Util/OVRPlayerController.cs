@@ -93,7 +93,12 @@ public class OVRPlayerController : MonoBehaviour
 	private bool prevHatLeft = false;
 	private bool prevHatRight = false;
 	private float SimulationRate = 60f;
+	private NetworkView networkView;
 
+	void Start()
+	{
+		networkView = GetComponent<NetworkView>();
+	}
 	void Awake()
 	{
 		Controller = gameObject.GetComponent<CharacterController>();
@@ -198,6 +203,11 @@ public class OVRPlayerController : MonoBehaviour
 
 		if (predictedXZ != actualXZ)
 			MoveThrottle += (actualXZ - predictedXZ) / (SimulationRate * Time.deltaTime);
+
+		if (networkView.isMine)
+		{
+			UpdateMovement();
+		}
 	}
 
 	public virtual void UpdateMovement()
