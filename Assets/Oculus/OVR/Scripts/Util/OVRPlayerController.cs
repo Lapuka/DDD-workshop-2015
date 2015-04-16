@@ -103,13 +103,6 @@ public class OVRPlayerController : MonoBehaviour
 	void Start()
 	{
 		networkView = GetComponent<NetworkView> ();
-		/*foreach (Camera c in GetComponentsInChildren<Camera>()) {
-			if (networkView.isMine) {
-				c.enabled = true;
-			} else {
-				c.enabled = false;
-			}
-		}*/
 	}
 	void Awake()
 	{
@@ -487,22 +480,28 @@ public class OVRPlayerController : MonoBehaviour
 	void OnSerializeNetworkView(BitStream stream, NetworkMessageInfo info)
 	{
 		Vector3 syncPosition = Vector3.zero;
+		Vector3 syncVelocity = Vector3.zero;
 		if (stream.isWriting)
 		{
-			syncPosition = GetComponent<Rigidbody>().position;
+			syncPosition = gameObject.GetComponent<Rigidbody>().position; 
 			stream.Serialize(ref syncPosition);
+			
+			syncVelocity = gameObject.GetComponent<Rigidbody>().velocity;
+			stream.Serialize(ref syncVelocity);
 		}
 		else
 		{
 			stream.Serialize(ref syncPosition);
+			stream.Serialize(ref syncVelocity);
 			
 			syncTime = 0f;
 			syncDelay = Time.time - lastSynchronizationTime;
 			lastSynchronizationTime = Time.time;
 			
-			syncStartPosition = GetComponent<Rigidbody>().position;
-			syncEndPosition = syncPosition;
+			syncEndPosition = syncPosition + syncVelocity * syncDelay;
+			syncStartPosition = gameObject.GetComponent<Rigidbody>().position;
 		}
 	}
 }
-
+	
+	

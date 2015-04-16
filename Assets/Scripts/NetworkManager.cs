@@ -76,15 +76,12 @@ public class NetworkManager : MonoBehaviour {
 		GameObject player = (GameObject) Network.Instantiate(playerPrefab, new Vector3(243.6f, 6.4f, 235.44f), Quaternion.identity, 0);;
 		NetworkView playerNetwork = player.GetComponent<NetworkView>();
 
+	}
 
-		if (playerNetwork.isMine)
-		{
-			Debug.Log ("Creating Camera");
-			player.GetComponent<OVRGamepadController>().enabled = true;
-			player.GetComponent<OVRPlayerController>().enabled = true;
-			player.GetComponentInChildren<OVRCameraRig>().enabled = true;
-			player.GetComponentInChildren<OVRManager>().enabled = true;
-
-		}
+	void OnPlayerDisconnected(NetworkPlayer player)
+	{
+		Debug.Log("Clean up after player " + player);
+		Network.RemoveRPCs(player);
+		Network.DestroyPlayerObjects(player);
 	}
 }
