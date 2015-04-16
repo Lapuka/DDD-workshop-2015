@@ -91,12 +91,10 @@ public class OVRCameraRig : MonoBehaviour
 	private void Start()
 	{
 		EnsureGameObjectIntegrity();
-
 		if (!Application.isPlaying)
 			return;
-
-		UpdateCameras();
-		UpdateAnchors();
+			UpdateCameras ();
+			UpdateAnchors ();
 	}
 
 #if !UNITY_ANDROID || UNITY_EDITOR
@@ -118,39 +116,37 @@ public class OVRCameraRig : MonoBehaviour
 
 	private void UpdateAnchors()
 	{
-		bool monoscopic = OVRManager.instance.monoscopic;
+			bool monoscopic = OVRManager.instance.monoscopic;
 
-		OVRPose tracker = OVRManager.tracker.GetPose();
-		OVRPose hmdLeftEye = OVRManager.display.GetEyePose(OVREye.Left);
-		OVRPose hmdRightEye = OVRManager.display.GetEyePose(OVREye.Right);
+			OVRPose tracker = OVRManager.tracker.GetPose ();
+			OVRPose hmdLeftEye = OVRManager.display.GetEyePose (OVREye.Left);
+			OVRPose hmdRightEye = OVRManager.display.GetEyePose (OVREye.Right);
 
-		trackerAnchor.localRotation = tracker.orientation;
-		centerEyeAnchor.localRotation = hmdLeftEye.orientation; // using left eye for now
-		leftEyeAnchor.localRotation = monoscopic ? centerEyeAnchor.localRotation : hmdLeftEye.orientation;
-		rightEyeAnchor.localRotation = monoscopic ? centerEyeAnchor.localRotation : hmdRightEye.orientation;
+			trackerAnchor.localRotation = tracker.orientation;
+			centerEyeAnchor.localRotation = hmdLeftEye.orientation; // using left eye for now
+			leftEyeAnchor.localRotation = monoscopic ? centerEyeAnchor.localRotation : hmdLeftEye.orientation;
+			rightEyeAnchor.localRotation = monoscopic ? centerEyeAnchor.localRotation : hmdRightEye.orientation;
 
-		trackerAnchor.localPosition = tracker.position;
-		centerEyeAnchor.localPosition = 0.5f * (hmdLeftEye.position + hmdRightEye.position);
-		leftEyeAnchor.localPosition = monoscopic ? centerEyeAnchor.localPosition : hmdLeftEye.position;
-		rightEyeAnchor.localPosition = monoscopic ? centerEyeAnchor.localPosition : hmdRightEye.position;
+			trackerAnchor.localPosition = tracker.position;
+			centerEyeAnchor.localPosition = 0.5f * (hmdLeftEye.position + hmdRightEye.position);
+			leftEyeAnchor.localPosition = monoscopic ? centerEyeAnchor.localPosition : hmdLeftEye.position;
+			rightEyeAnchor.localPosition = monoscopic ? centerEyeAnchor.localPosition : hmdRightEye.position;
 
-		if (UpdatedAnchors != null)
-		{
-			UpdatedAnchors(this);
-		}
+			if (UpdatedAnchors != null) {
+				UpdatedAnchors (this);
+			}
 	}
 
 	private void UpdateCameras()
 	{
-		if (needsCameraConfigure)
-		{
-			leftEyeCamera = ConfigureCamera(OVREye.Left);
-			rightEyeCamera = ConfigureCamera(OVREye.Right);
+			if (needsCameraConfigure) {
+				leftEyeCamera = ConfigureCamera (OVREye.Left);
+				rightEyeCamera = ConfigureCamera (OVREye.Right);
 
 #if !UNITY_ANDROID || UNITY_EDITOR
-			needsCameraConfigure = false;
+				needsCameraConfigure = false;
 #endif
-		}
+			}
 	}
 
 	public void EnsureGameObjectIntegrity()
@@ -273,17 +269,16 @@ public class OVRCameraRig : MonoBehaviour
 
 	private Camera ConfigureCamera(OVREye eye)
 	{
-		Transform anchor = (eye == OVREye.Left) ? leftEyeAnchor : rightEyeAnchor;
-		Camera cam = anchor.GetComponent<Camera>();
+	
+			Transform anchor = (eye == OVREye.Left) ? leftEyeAnchor : rightEyeAnchor;
+			Camera cam = anchor.GetComponent<Camera> ();
+			OVRDisplay.EyeRenderDesc eyeDesc = OVRManager.display.GetEyeRenderDesc (eye);
 
-		OVRDisplay.EyeRenderDesc eyeDesc = OVRManager.display.GetEyeRenderDesc(eye);
-
-		cam.fieldOfView = eyeDesc.fov.y;
-		cam.aspect = eyeDesc.resolution.x / eyeDesc.resolution.y;
-		cam.rect = new Rect(0f, 0f, OVRManager.instance.virtualTextureScale, OVRManager.instance.virtualTextureScale);
-		cam.targetTexture = OVRManager.display.GetEyeTexture(eye);
-		cam.hdr = OVRManager.instance.hdr;
-
+			cam.fieldOfView = eyeDesc.fov.y;
+			cam.aspect = eyeDesc.resolution.x / eyeDesc.resolution.y;
+			cam.rect = new Rect (0f, 0f, OVRManager.instance.virtualTextureScale, OVRManager.instance.virtualTextureScale);
+			cam.targetTexture = OVRManager.display.GetEyeTexture (eye);
+			cam.hdr = OVRManager.instance.hdr;
 #if UNITY_ANDROID && !UNITY_EDITOR
 		// Enforce camera render order
 		cam.depth = (eye == OVREye.Left) ?
@@ -303,16 +298,16 @@ public class OVRCameraRig : MonoBehaviour
 		cam.clearFlags = (hasSkybox) ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
 #endif
 
-		// When rendering monoscopic, we will use the left camera render for both eyes.
-		if (eye == OVREye.Right)
-		{
-			cam.enabled = !OVRManager.instance.monoscopic;
+			// When rendering monoscopic, we will use the left camera render for both eyes.
+			if (eye == OVREye.Right) {
+				cam.enabled = !OVRManager.instance.monoscopic;
+			}
+
+			// AA is documented to have no effect in deferred, but it causes black screens.
+			if (cam.actualRenderingPath == RenderingPath.DeferredLighting)
+				OVRManager.instance.eyeTextureAntiAliasing = 0;
+		
+			return cam;
+
 		}
-
-		// AA is documented to have no effect in deferred, but it causes black screens.
-		if (cam.actualRenderingPath == RenderingPath.DeferredLighting)
-			OVRManager.instance.eyeTextureAntiAliasing = 0;
-
-		return cam;
 	}
-}

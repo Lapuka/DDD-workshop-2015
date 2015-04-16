@@ -94,40 +94,61 @@ public class OVRPlayerController : MonoBehaviour
 	private bool prevHatRight = false;
 	private float SimulationRate = 60f;
 	private NetworkView networkView;
+	private float lastSynchronizationTime = 0f;
+	private float syncDelay = 0f;
+	private float syncTime = 0f;
+	private Vector3 syncStartPosition = Vector3.zero;
+	private Vector3 syncEndPosition = Vector3.zero;
 
 	void Start()
 	{
-		networkView = GetComponent<NetworkView>();
+		networkView = GetComponent<NetworkView> ();
+		/*foreach (Camera c in GetComponentsInChildren<Camera>()) {
+			if (networkView.isMine) {
+				c.enabled = true;
+			} else {
+				c.enabled = false;
+			}
+		}*/
 	}
 	void Awake()
 	{
-		Controller = gameObject.GetComponent<CharacterController>();
-
+		NetworkView playerNetwork = gameObject.GetComponent<NetworkView>();
+		if (playerNetwork.isMine)
+		{
+			Debug.Log ("Creating Camera");
+			gameObject.GetComponent<OVRGamepadController>().enabled = true;
+			gameObject.GetComponent<OVRPlayerController>().enabled = true;
+			gameObject.GetComponentInChildren<OVRCameraRig>().enabled = true;
+			gameObject.GetComponentInChildren<OVRManager>().enabled = true;
+			
+		}
+			Controller = gameObject.GetComponent<CharacterController> ();
+		Debug.Log ("Get Control of char");
 		if(Controller == null)
 			Debug.LogWarning("OVRPlayerController: No CharacterController attached.");
 
 		// We use OVRCameraRig to set rotations to cameras,
 		// and to be influenced by rotation
-		OVRCameraRig[] CameraRigs = gameObject.GetComponentsInChildren<OVRCameraRig>();
+			OVRCameraRig[] CameraRigs = gameObject.GetComponentsInChildren<OVRCameraRig> ();
+			if (CameraRigs.Length == 0)
+				Debug.LogWarning ("OVRPlayerController: No OVRCameraRig attached.");
+			else if (CameraRigs.Length > 1)
+				Debug.LogWarning ("OVRPlayerController: More then 1 OVRCameraRig attached.");
+			else
+				CameraRig = CameraRigs [0];
+			InitialYRotation = transform.rotation.eulerAngles.y;
+		Debug.Log ("End of awake");
 
-		if(CameraRigs.Length == 0)
-			Debug.LogWarning("OVRPlayerController: No OVRCameraRig attached.");
-		else if (CameraRigs.Length > 1)
-			Debug.LogWarning("OVRPlayerController: More then 1 OVRCameraRig attached.");
-		else
-			CameraRig = CameraRigs[0];
-
-		InitialYRotation = transform.rotation.eulerAngles.y;
 	}
 
-	void OnEnable()
+		void OnEnable()
 	{
-		OVRManager.display.RecenteredPose += ResetOrientation;
+			OVRManager.display.RecenteredPose += ResetOrientation;
 
-		if (CameraRig != null)
-		{
-			CameraRig.UpdatedAnchors += UpdateTransform;
-		}
+			if (CameraRig != null) {
+				CameraRig.UpdatedAnchors += UpdateTransform;
+			}
 	}
 
 	void OnDisable()
@@ -142,6 +163,8 @@ public class OVRPlayerController : MonoBehaviour
 
 	protected virtual void Update()
 	{
+		if (networkView.isMine)
+		{
 		if (useProfileData)
 		{
 			if (InitialPose == null)
@@ -164,8 +187,6 @@ public class OVRPlayerController : MonoBehaviour
 			CameraRig.transform.localRotation = InitialPose.Value.orientation;
 			InitialPose = null;
 		}
-
-		UpdateMovement();
 
 		Vector3 moveDirection = Vector3.zero;
 
@@ -204,126 +225,134 @@ public class OVRPlayerController : MonoBehaviour
 		if (predictedXZ != actualXZ)
 			MoveThrottle += (actualXZ - predictedXZ) / (SimulationRate * Time.deltaTime);
 
-		if (networkView.isMine)
-		{
+
 			UpdateMovement();
 		}
+		else
+		{
+			SyncedMovement();
+		}
+	}
+	private void SyncedMovement()
+	{
+		syncTime += Time.deltaTime;
+		GetComponent<Rigidbody>().position = Vector3.Lerp(syncStartPosition, syncEndPosition, syncTime / syncDelay);
 	}
 
 	public virtual void UpdateMovement()
 	{
-		if (HaltUpdateMovement)
-			return;
+		if (networkView.isMine) {
+			if (HaltUpdateMovement)
+				return;
 
-		bool moveForward = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
-		bool moveLeft = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
-		bool moveRight = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow);
-		bool moveBack = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
+			bool moveForward = Input.GetKey (KeyCode.W) || Input.GetKey (KeyCode.UpArrow);
+			bool moveLeft = Input.GetKey (KeyCode.A) || Input.GetKey (KeyCode.LeftArrow);
+			bool moveRight = Input.GetKey (KeyCode.D) || Input.GetKey (KeyCode.RightArrow);
+			bool moveBack = Input.GetKey (KeyCode.S) || Input.GetKey (KeyCode.DownArrow);
 
-		bool dpad_move = false;
+			bool dpad_move = false;
 
-		if (OVRGamepadController.GPC_GetButton(OVRGamepadController.Button.Up))
-		{
-			moveForward = true;
-			dpad_move   = true;
+			if (OVRGamepadController.GPC_GetButton (OVRGamepadController.Button.Up)) {
+				moveForward = true;
+				dpad_move = true;
 
-		}
-		if (OVRGamepadController.GPC_GetButton(OVRGamepadController.Button.Down))
-		{
-			moveBack  = true;
-			dpad_move = true;
-		}
+			}
+			if (OVRGamepadController.GPC_GetButton (OVRGamepadController.Button.Down)) {
+				moveBack = true;
+				dpad_move = true;
+			}
 
-		MoveScale = 1.0f;
+			MoveScale = 1.0f;
 
-		if ( (moveForward && moveLeft) || (moveForward && moveRight) ||
-			 (moveBack && moveLeft)    || (moveBack && moveRight) )
-			MoveScale = 0.70710678f;
+			if ((moveForward && moveLeft) || (moveForward && moveRight) ||
+				(moveBack && moveLeft) || (moveBack && moveRight))
+				MoveScale = 0.70710678f;
 
-		// No positional movement if we are in the air
-		if (!Controller.isGrounded)
-			MoveScale = 0.0f;
+			// No positional movement if we are in the air
+			if (!Controller.isGrounded)
+				MoveScale = 0.0f;
 
-		MoveScale *= SimulationRate * Time.deltaTime;
+			MoveScale *= SimulationRate * Time.deltaTime;
 
-		// Compute this for key movement
-		float moveInfluence = Acceleration * 0.1f * MoveScale * MoveScaleMultiplier;
+			// Compute this for key movement
+			float moveInfluence = Acceleration * 0.1f * MoveScale * MoveScaleMultiplier;
 
-		// Run!
-		if (dpad_move || Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
-			moveInfluence *= 2.0f;
+			// Run!
+			if (dpad_move || Input.GetKey (KeyCode.LeftShift) || Input.GetKey (KeyCode.RightShift))
+				moveInfluence *= 2.0f;
 
-		Quaternion ort = transform.rotation;
-		Vector3 ortEuler = ort.eulerAngles;
-		ortEuler.z = ortEuler.x = 0f;
-		ort = Quaternion.Euler(ortEuler);
+			Quaternion ort = transform.rotation;
+			Vector3 ortEuler = ort.eulerAngles;
+			ortEuler.z = ortEuler.x = 0f;
+			ort = Quaternion.Euler (ortEuler);
 
-		if (moveForward)
-			MoveThrottle += ort * (transform.lossyScale.z * moveInfluence * Vector3.forward);
-		if (moveBack)
-			MoveThrottle += ort * (transform.lossyScale.z * moveInfluence * BackAndSideDampen * Vector3.back);
-		if (moveLeft)
-			MoveThrottle += ort * (transform.lossyScale.x * moveInfluence * BackAndSideDampen * Vector3.left);
-		if (moveRight)
-			MoveThrottle += ort * (transform.lossyScale.x * moveInfluence * BackAndSideDampen * Vector3.right);
+			if (moveForward)
+				MoveThrottle += ort * (transform.lossyScale.z * moveInfluence * Vector3.forward);
+			if (moveBack)
+				MoveThrottle += ort * (transform.lossyScale.z * moveInfluence * BackAndSideDampen * Vector3.back);
+			if (moveLeft)
+				MoveThrottle += ort * (transform.lossyScale.x * moveInfluence * BackAndSideDampen * Vector3.left);
+			if (moveRight)
+				MoveThrottle += ort * (transform.lossyScale.x * moveInfluence * BackAndSideDampen * Vector3.right);
 
-		bool curHatLeft = OVRGamepadController.GPC_GetButton(OVRGamepadController.Button.LeftShoulder);
+			bool curHatLeft = OVRGamepadController.GPC_GetButton (OVRGamepadController.Button.LeftShoulder);
 
-		Vector3 euler = transform.rotation.eulerAngles;
+			Vector3 euler = transform.rotation.eulerAngles;
 
-		if (curHatLeft && !prevHatLeft)
-			euler.y -= RotationRatchet;
+			if (curHatLeft && !prevHatLeft)
+				euler.y -= RotationRatchet;
 
-		prevHatLeft = curHatLeft;
+			prevHatLeft = curHatLeft;
 
-		bool curHatRight = OVRGamepadController.GPC_GetButton(OVRGamepadController.Button.RightShoulder);
+			bool curHatRight = OVRGamepadController.GPC_GetButton (OVRGamepadController.Button.RightShoulder);
 
-		if(curHatRight && !prevHatRight)
-			euler.y += RotationRatchet;
+			if (curHatRight && !prevHatRight)
+				euler.y += RotationRatchet;
 
-		prevHatRight = curHatRight;
+			prevHatRight = curHatRight;
 
-		//Use keys to ratchet rotation
-		if (Input.GetKeyDown(KeyCode.Q))
-			euler.y -= RotationRatchet;
+			//Use keys to ratchet rotation
+			if (Input.GetKeyDown (KeyCode.Q))
+				euler.y -= RotationRatchet;
 
-		if (Input.GetKeyDown(KeyCode.E))
-			euler.y += RotationRatchet;
+			if (Input.GetKeyDown (KeyCode.E))
+				euler.y += RotationRatchet;
 
-		float rotateInfluence = SimulationRate * Time.deltaTime * RotationAmount * RotationScaleMultiplier;
+			float rotateInfluence = SimulationRate * Time.deltaTime * RotationAmount * RotationScaleMultiplier;
 
-		if (!SkipMouseRotation)
-			euler.y += Input.GetAxis("Mouse X") * rotateInfluence * 3.25f;
+			if (!SkipMouseRotation)
+				euler.y += Input.GetAxis ("Mouse X") * rotateInfluence * 3.25f;
 
-		moveInfluence = SimulationRate * Time.deltaTime * Acceleration * 0.1f * MoveScale * MoveScaleMultiplier;
+			moveInfluence = SimulationRate * Time.deltaTime * Acceleration * 0.1f * MoveScale * MoveScaleMultiplier;
 
 #if !UNITY_ANDROID // LeftTrigger not avail on Android game pad
-		moveInfluence *= 1.0f + OVRGamepadController.GPC_GetAxis(OVRGamepadController.Axis.LeftTrigger);
+			moveInfluence *= 1.0f + OVRGamepadController.GPC_GetAxis (OVRGamepadController.Axis.LeftTrigger);
 #endif
 
-		float leftAxisX = OVRGamepadController.GPC_GetAxis(OVRGamepadController.Axis.LeftXAxis);
-		float leftAxisY = OVRGamepadController.GPC_GetAxis(OVRGamepadController.Axis.LeftYAxis);
+			float leftAxisX = OVRGamepadController.GPC_GetAxis (OVRGamepadController.Axis.LeftXAxis);
+			float leftAxisY = OVRGamepadController.GPC_GetAxis (OVRGamepadController.Axis.LeftYAxis);
 
-		if(leftAxisY > 0.0f)
-			MoveThrottle += ort * (leftAxisY * moveInfluence * Vector3.forward);
+			if (leftAxisY > 0.0f)
+				MoveThrottle += ort * (leftAxisY * moveInfluence * Vector3.forward);
 
-		if(leftAxisY < 0.0f)
-			MoveThrottle += ort * (Mathf.Abs(leftAxisY) * moveInfluence * BackAndSideDampen * Vector3.back);
+			if (leftAxisY < 0.0f)
+				MoveThrottle += ort * (Mathf.Abs (leftAxisY) * moveInfluence * BackAndSideDampen * Vector3.back);
 
-		if(leftAxisX < 0.0f)
-			MoveThrottle += ort * (Mathf.Abs(leftAxisX) * moveInfluence * BackAndSideDampen * Vector3.left);
+			if (leftAxisX < 0.0f)
+				MoveThrottle += ort * (Mathf.Abs (leftAxisX) * moveInfluence * BackAndSideDampen * Vector3.left);
 
-		if(leftAxisX > 0.0f)
-			MoveThrottle += ort * (leftAxisX * moveInfluence * BackAndSideDampen * Vector3.right);
+			if (leftAxisX > 0.0f)
+				MoveThrottle += ort * (leftAxisX * moveInfluence * BackAndSideDampen * Vector3.right);
 
-		float rightAxisX = OVRGamepadController.GPC_GetAxis(OVRGamepadController.Axis.RightXAxis);
+			float rightAxisX = OVRGamepadController.GPC_GetAxis (OVRGamepadController.Axis.RightXAxis);
 
-		euler.y += rightAxisX * rotateInfluence;
+			euler.y += rightAxisX * rotateInfluence;
 
-		transform.rotation = Quaternion.Euler(euler);
+			transform.rotation = Quaternion.Euler (euler);
 
-        if (Input.GetButtonDown("Jump")) Jump();
-        
+			if (Input.GetButtonDown ("Jump"))
+				Jump ();
+		}
 	}
 
 	/// <summary>
@@ -331,19 +360,19 @@ public class OVRPlayerController : MonoBehaviour
 	/// </summary>
 	public void UpdateTransform(OVRCameraRig rig)
 	{
-		Transform root = CameraRig.trackingSpace;
-		Transform centerEye = CameraRig.centerEyeAnchor;
+	
+			Transform root = CameraRig.trackingSpace;
+			Transform centerEye = CameraRig.centerEyeAnchor;
 
-		if (HmdRotatesY)
-		{
-			Vector3 prevPos = root.position;
-			Quaternion prevRot = root.rotation;
+			if (HmdRotatesY) {
+				Vector3 prevPos = root.position;
+				Quaternion prevRot = root.rotation;
 
-			transform.rotation = Quaternion.Euler(0.0f, centerEye.rotation.eulerAngles.y, 0.0f);
+				transform.rotation = Quaternion.Euler (0.0f, centerEye.rotation.eulerAngles.y, 0.0f);
 
-			root.position = prevPos;
-			root.rotation = prevRot;
-		}
+				root.position = prevPos;
+				root.rotation = prevRot;
+			}
 	}
 
 	/// <summary>
@@ -351,12 +380,12 @@ public class OVRPlayerController : MonoBehaviour
 	/// </summary>
 	public bool Jump()
 	{
-		if (!Controller.isGrounded)
-			return false;
+			if (!Controller.isGrounded)
+				return false;
 
-		MoveThrottle += new Vector3(0, JumpForce, 0);
+			MoveThrottle += new Vector3 (0, JumpForce, 0);
 
-		return true;
+			return true;
 	}
 
 	/// <summary>
@@ -364,9 +393,11 @@ public class OVRPlayerController : MonoBehaviour
 	/// </summary>
 	public void Stop()
 	{
-		Controller.Move(Vector3.zero);
-		MoveThrottle = Vector3.zero;
-		FallSpeed = 0.0f;
+		if (networkView.isMine) {
+			Controller.Move (Vector3.zero);
+			MoveThrottle = Vector3.zero;
+			FallSpeed = 0.0f;
+		}
 	}
 
 	/// <summary>
@@ -451,6 +482,26 @@ public class OVRPlayerController : MonoBehaviour
 			Vector3 euler = transform.rotation.eulerAngles;
 			euler.y = InitialYRotation;
 			transform.rotation = Quaternion.Euler(euler);
+		}
+	}
+	void OnSerializeNetworkView(BitStream stream, NetworkMessageInfo info)
+	{
+		Vector3 syncPosition = Vector3.zero;
+		if (stream.isWriting)
+		{
+			syncPosition = GetComponent<Rigidbody>().position;
+			stream.Serialize(ref syncPosition);
+		}
+		else
+		{
+			stream.Serialize(ref syncPosition);
+			
+			syncTime = 0f;
+			syncDelay = Time.time - lastSynchronizationTime;
+			lastSynchronizationTime = Time.time;
+			
+			syncStartPosition = GetComponent<Rigidbody>().position;
+			syncEndPosition = syncPosition;
 		}
 	}
 }
