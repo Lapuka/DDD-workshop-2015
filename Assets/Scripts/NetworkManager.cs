@@ -15,9 +15,24 @@ public class NetworkManager : MonoBehaviour {
 	}
 	void OnGUI()
 	{
+		if (Input.GetKey("escape"))
+		{
+			Application.Quit ();
+			Debug.Log ("Application Quited");
+		}
+		if (Input.GetKeyDown(KeyCode.Backspace))
+		{
+			Application.LoadLevel (Application.loadedLevel);
+			Network.Disconnect ();
+		}
 		if (!Network.isClient && !Network.isServer)
 		{
-			if (GUI.Button(new Rect(Screen.width/2, Screen.height/2, 250, 100), "Start Server"))
+			GUIStyle gs = new GUIStyle();
+			gs.fontSize = 50;
+			gs.normal.textColor = Color.white;
+			gs.alignment = TextAnchor.UpperCenter;
+			GUI.Label(new Rect(Screen.width/2-150, 20, 300, 200), "IT Development Team", gs);
+			if (GUI.Button(new Rect(100, 100, 250, 100), "Start Server"))
 				StartServer();
 			
 			if (GUI.Button(new Rect(100, 250, 250, 100), "Refresh Hosts"))
@@ -64,20 +79,9 @@ public class NetworkManager : MonoBehaviour {
 	
 	private void SpawnPlayer()
 	{
-//		Debug.Log ("At Beginning of SpawnPlayer");
-//		Object o = Network.Instantiate(playerPrefab, new Vector3(243.6f, 6.4f, 235.44f), Quaternion.identity, 0);
-//		GameObject[] players=GameObject.FindGameObjectsWithTag("Player");
-//		GameObject player = (GameObject) o;
-//		NetworkView playerNetwork = player.GetComponent<NetworkView>();
-
-		Debug.Log ("At Beginning of SpawnPlayer");
-
-		//GameObject[] players=GameObject.FindGameObjectsWithTag("Player");
 		GameObject player = (GameObject) Network.Instantiate(playerPrefab, new Vector3(243.6f, 6.4f, 235.44f), Quaternion.identity, 0);;
 		NetworkView playerNetwork = player.GetComponent<NetworkView>();
-
 	}
-
 	void OnPlayerDisconnected(NetworkPlayer player)
 	{
 		Debug.Log("Clean up after player " + player);
